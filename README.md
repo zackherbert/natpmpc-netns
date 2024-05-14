@@ -9,8 +9,8 @@ natpmpc-netns can detect if the provided external port or ip address changed,
 can optionally run a provided script if configured,
 and will save the public ip and port in the following files:
 
-- /tmp/netns_[NETNS]_port_[PORT]_public_ip
-- /tmp/netns_[NETNS]_port_[PORT]_public_port
+- `/tmp/netns_[NETNS]_port_[PORT]_public_ip`
+- `/tmp/netns_[NETNS]_port_[PORT]_public_port`
 
 ## Install
 
@@ -53,8 +53,8 @@ Every 45 seconds, the `natpmpc-netns` script will request a renewal of the reque
 
 The external ip and external port detected will be written in the following files (still assuming netns=vpn0 and port=4444):
 
-- /tmp/netns_vpn0_port_4444_public_ip
-- /tmp/netns_vpn0_port_4444_public_port
+- `/tmp/netns_vpn0_port_4444_public_ip`
+- `/tmp/netns_vpn0_port_4444_public_port`
 
 ## Usage in the default network namespace
 
@@ -70,12 +70,12 @@ Put the script you want to be run in the /etc/natpmpc/vpn0/cmd file.
 
 Example:
 
-'''
+```
 #!/bin/bash
 logger "External ip:port changed for local port 4444: $PUBLIC_IP:$PUBLIC_PORT"
-'''
+```
 
 You need to set this file as executable with:
-'''
+```
 chmod +x /etc/natpmpc/vpn0/cmd
-'''
+```
