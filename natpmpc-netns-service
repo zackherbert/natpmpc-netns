@@ -1,0 +1,28 @@
+#!/bin/bash
+
+NETNS=$1
+
+if [ -z "$NETNS" ]; then
+    echo "$0 should be run with a netns parameter. Use 'default' to use default namespace."
+    exit -1
+fi
+
+NETNS_FOLDER=/etc/natpmpc/$NETNS
+
+PORT_FILE=$NETNS_FOLDER/port
+CMD=$NETNS_FOLDER/cmd
+
+if [ ! -f "$PORT_FILE" ]; then
+    echo "File '$PORT_FILE' is not found"
+    exit -1
+fi
+
+if [ -f "$CMD" ]; then
+    CMD_PARAM="-c $CMD"
+fi
+
+read PORT < $PORT_FILE
+
+echo "Running natpmpc-netns for port $PORT on netns $NETNS"
+
+/usr/local/bin/natpmpc-netns -p $PORT -n $NETNS $CMD_PARAM

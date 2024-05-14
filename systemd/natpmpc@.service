@@ -1,0 +1,11 @@
+[Unit]
+Description=Using natpmpc to configure port forwarding on netns %I
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/natpmpc-netns-service %i
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

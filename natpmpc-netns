@@ -1,0 +1,119 @@
+#!/bin/bash
+
+print_help_and_exit () {
+    script_name=$(basename "$0")
+    echo -e "Usage: $script_name -p PORT [ -n NETNS ] [ -g GATEWAY ] [ -c CMD ]"
+    exit -1
+}
+
+while getopts p:n:g:c:h flag
+do
+    case "${flag}" in
+        p) PORT=${OPTARG};;
+        n) NETNS=${OPTARG};;
+        g) GATEWAY=${OPTARG};;
+        c) COMMAND=${OPTARG};;
+        h) print_help_and_exit;;
+	*) print_help_and_exit;;
+    esac
+done
+
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
+
+if [ -z "$PORT" ]; then
+    printf "Port is required.\n\n"
+    print_help_and_exit
+fi
+
+if [ -z "$NETNS" ]; then
+    NETNS=default
+fi
+
+echo "Trying to configure vpn to open udp and tcp ports with:"
+echo " - PORT: $PORT"
+echo " - NETNS: ${NETNS}"
+echo " - GATEWAY: ${GATEWAY-default}"
+echo " - COMMAND: ${COMMAND-none}"
+echo ""
+
+TIMEOUT=60
+SLEEP=45
+IP_FILE="/tmp/netns_${NETNS}_port_${PORT}_public_ip"
+PORT_FILE="/tmp/netns_${NETNS}_port_${PORT}_public_port"
+
+# Initialize IP and port files if they do not exist
+if [ ! -f "$IP_FILE" ]; then
+    echo "UNSET" > "$IP_FILE"
+fi
+if [ ! -f "$PORT_FILE" ]; then
+    echo "UNSET" > "$PORT_FILE"
+fi
+
+natpmpc_command () {
+    PROTOCOL=$1
+
+    if [ ! "$NETNS" == "default" ]; then
+        _NETNS_EXEC="ip netns exec $NETNS "
+    else
+        _NETNS_EXEC=""
+    fi
+
+    if [ -n "$GATEWAY" ]; then
+        _GATEWAY_PARAM="-g $GATEWAY"
+    else
+        _GATEWAY_PARAM=""
+    fi
+        
+    NATPMPC_COMMAND="$_NETNS_EXEC natpmpc -a 1 $PORT $PROTOCOL $TIMEOUT $_GATEWAY_PARAM"
+
+    echo $NATPMPC_COMMAND
+    eval $NATPMPC_COMMAND
+}
+
+natpmpc_run () {
+    natpmpc_command udp && natpmpc_command tcp
+}
+
+new_external_ip_and_port_detected() {
+    echo "New External ip:port detected!"
+    echo "New ip:port = $PUBLIC_IP:$PUBLIC_PORT"
+    echo ""
+    if [ -n "$COMMAND" ]; then
+        echo "Running cmd: $COMMAND"
+        PUBLIC_IP=$PUBLIC_IP PUBLIC_PORT=$PUBLIC_PORT $COMMAND
+    fi
+}
+
+handle_external_ip_and_port () {
+    echo ""
+    PREVIOUS_PUBLIC_IP=$(cat $IP_FILE)
+    PREVIOUS_PUBLIC_PORT=$(cat $PORT_FILE)
+    echo "External ip:port detected = $PUBLIC_IP:$PUBLIC_PORT Previous: $PREVIOUS_PUBLIC_IP:$PREVIOUS_PUBLIC_PORT"
+    echo ""
+
+    if [ "$PUBLIC_IP" != "$PREVIOUS_PUBLIC_IP" ] || [ "$PUBLIC_PORT" != "$PREVIOUS_PUBLIC_PORT" ]; then
+        echo $PUBLIC_IP > $IP_FILE
+        echo $PUBLIC_PORT > $PORT_FILE
+	new_external_ip_and_port_detected
+    fi
+}
+
+process_output () {
+    while read line; do
+        if [[ "$line" == *"Mapped public port"* && "$line" == *"protocol TCP"* ]]; then
+            PUBLIC_PORT=$(echo "$line" | awk '{print $4}')
+	    handle_external_ip_and_port
+        elif [[ "$line" == *"Public IP address : "* ]]; then
+            PUBLIC_IP=$(echo "$line" | awk '{print $5}')
+        fi
+    done
+}
+
+while true; do
+    natpmpc_run | tee >(process_output) || { echo -e "ERROR with natpmpc command \a"; }
+
+    sleep $SLEEP
+done
