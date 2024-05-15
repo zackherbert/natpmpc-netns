@@ -79,3 +79,28 @@ You need to set this file as executable with:
 ```
 chmod +x /etc/natpmpc/vpn0/cmd
 ```
+
+## Testing port forwarding
+
+To test that port forwarding is active, you can use the `natpmpc-netns-test` script
+which will open a port in your netns with netcat (first using tcp, then udp),
+and will then send a test message going through the external port:
+
+```
+$ sudo natpmpc-netns-test vpn0
+Test TCP
+
+Listening on port 4444 using TCP...
+Running: ip netns exec vpn0  nc  -l -q 1 -p 4444 > /tmp/output_4444_TCP.txt < /dev/null &
+Please run the following command:
+echo "test message" | nc -N -q 1 IP PORT
+Waiting. MESSAGE RECEIVED - PORT OPEN!
+
+Test UDP
+
+Listening on port 4444 using UDP...
+Running: ip netns exec vpn0  nc -u -l -q 1 -p 4444 > /tmp/output_4444_UDP.txt < /dev/null &
+Please run the following command:
+echo "test message" | nc -N -q 1 -u IP PORT
+Waiting. MESSAGE RECEIVED - PORT OPEN!
+```

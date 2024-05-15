@@ -1,0 +1,119 @@
+#!/bin/bash
+
+script_name=$(basename "$0")
+
+print_help_and_exit () {
+    echo -e "Usage: $script_name NETNS"
+    exit -1
+}
+
+NETNS=$1
+
+if [ -z "$NETNS" ]; then
+    echo "$script_name should be run with a netns parameter. Use 'default' to use default namespace."
+    exit -1
+fi
+
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
+
+NETNS_FOLDER=/etc/natpmpc/$NETNS
+
+PORT_FILE=$NETNS_FOLDER/port
+
+if [ ! -f "$PORT_FILE" ]; then
+    echo "Error: File '$PORT_FILE' not found."
+    exit -1
+fi
+
+read PORT < $PORT_FILE
+
+# File paths for public IP and port
+PUBLIC_IP_FILE="/tmp/netns_${NETNS}_port_${PORT}_public_ip"
+PUBLIC_PORT_FILE="/tmp/netns_${NETNS}_port_${PORT}_public_port"
+
+# Check if necessary files exist
+if [ ! -f "$PUBLIC_IP_FILE" ]; then
+  echo "Error: File '$PUBLIC_IP_FILE' not found."
+  exit -1
+fi
+
+if [ ! -f "$PUBLIC_PORT_FILE" ]; then
+  echo "Error: File '$PUBLIC_PORT_FILE' not found."
+  exit -1
+fi
+
+# Read public IP and port
+PUBLIC_IP=$(cat $PUBLIC_IP_FILE)
+PUBLIC_PORT=$(cat $PUBLIC_PORT_FILE)
+
+OUTPUT_FILE=/tmp/output
+
+if [ ! "$NETNS" == "default" ]; then
+    _NETNS_EXEC="ip netns exec $NETNS "
+else
+    _NETNS_EXEC=""
+fi
+
+# Function to clean up netcat listener and temporary files
+cleanup() {
+  kill $LISTEN_PID 2> /dev/null
+  rm -f ${OUTPUT_FILE}_${PORT}_${PROTOCOL}.txt
+  echo ""
+}
+
+# Function to test port forwarding
+test_port_forwarding() {
+  PROTOCOL=$1
+  OPTION=$2
+  EXPECTED_MESSAGE="test message"
+
+  echo "Test $PROTOCOL"
+  echo ""
+  echo "Listening on port $PORT using $PROTOCOL..."
+
+  # Start netcat in listening mode, capturing output
+  NETCAT_COMMAND="$_NETNS_EXEC nc $OPTION -l -q 1 -p $PORT > ${OUTPUT_FILE}_${PORT}_${PROTOCOL}.txt < /dev/null &"
+  echo "Running: $NETCAT_COMMAND"
+  eval $NETCAT_COMMAND
+  LISTEN_PID=$!
+
+  # Setup trap to ensure cleanup happens on script exit
+  trap cleanup EXIT
+
+  # Give nc some time to start listening
+  sleep 1
+
+  echo "Please run the following command:"
+  Command="echo \"$EXPECTED_MESSAGE\" | nc -N -q 1 $OPTION $PUBLIC_IP $PUBLIC_PORT"
+  echo $Command
+  echo -n "Waiting"
+  eval $Command
+
+  # Check every second for up to 5 seconds to see if data was received
+  for i in {1..60}; do
+    echo -n "."
+    if grep -q "$EXPECTED_MESSAGE" ${OUTPUT_FILE}_${PORT}_${PROTOCOL}.txt; then
+      echo " MESSAGE RECEIVED - PORT OPEN!"
+      cleanup
+      return  # Exit function early as message was received
+    fi
+    sleep 1
+  done
+
+  echo " Nothing received!"
+  cleanup
+}
+
+# Test TCP forwarding
+test_port_forwarding "TCP" ""
+
+# Test UDP forwarding
+test_port_forwarding "UDP" "-u"
+
+# Remove EXIT trap
+trap - EXIT
+
+exit 0
