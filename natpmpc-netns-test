@@ -3,11 +3,17 @@
 script_name=$(basename "$0")
 
 print_help_and_exit () {
-    echo -e "Usage: $script_name NETNS"
+    echo -e "Usage: $script_name NETNS [optional redirected NETNS]"
     exit -1
 }
 
 NETNS=$1
+LISTEN_NETNS=$2
+
+echo "LISTEN_NETNS: $LISTEN_NETNS"
+if [ -z "${LISTEN_NETNS}" ]; then
+    LISTEN_NETNS=$NETNS
+fi
 
 if [ -z "$NETNS" ]; then
     echo "$script_name should be run with a netns parameter. Use 'default' to use default namespace."
@@ -51,8 +57,8 @@ PUBLIC_PORT=$(cat $PUBLIC_PORT_FILE)
 
 OUTPUT_FILE=/tmp/output
 
-if [ ! "$NETNS" == "default" ]; then
-    _NETNS_EXEC="ip netns exec $NETNS "
+if [ ! "$LISTEN_NETNS" == "default" ]; then
+    _NETNS_EXEC="ip netns exec $LISTEN_NETNS "
 else
     _NETNS_EXEC=""
 fi
@@ -93,7 +99,7 @@ test_port_forwarding() {
   eval $Command
 
   # Check every second for up to 5 seconds to see if data was received
-  for i in {1..60}; do
+  for i in {1..10}; do
     echo -n "."
     if grep -q "$EXPECTED_MESSAGE" ${OUTPUT_FILE}_${PORT}_${PROTOCOL}.txt; then
       echo " MESSAGE RECEIVED - PORT OPEN!"
