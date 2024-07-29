@@ -10,7 +10,6 @@ print_help_and_exit () {
 NETNS=$1
 LISTEN_NETNS=$2
 
-echo "LISTEN_NETNS: $LISTEN_NETNS"
 if [ -z "${LISTEN_NETNS}" ]; then
     LISTEN_NETNS=$NETNS
 fi
